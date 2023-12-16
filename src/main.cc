@@ -160,6 +160,25 @@ const char* temperature_discovery_payload = "{"
 "}"
 "}";
 
+const char* indicator_topic_discovery = "homeassistant/light/tele6550/tele6550_indicator/config";
+const char* indicator_topic_brightness = "tele6550/tele6550_indicator/brightness";
+const char* indicator_topic_command = "tele6550/tele6550_indicator/command";
+const char* indicator_discovery_payload = "{"
+"\"name\":\"indicator\", "
+"\"device_class\":\"light\", "
+"\"command_topic\":\"tele6550/tele6550_indicator/command\", "
+"\"brightness_command_topic\":\"tele6550/tele6550_indicator/brightness\", "
+"\"on_command_type\":\"brightness\", "
+"\"unique_id\":\"tele6550_temperature\", "
+"\"device\":{"
+  "\"name\":\"tele6550\", "
+  "\"model\":\"tele6550_esp32\", "
+  "\"manufacturer\":\"Arthur Kautz\", "
+  "\"identifiers\": [\"tele6550\"]"
+"}"
+"}";
+
+
 
 extern "C" void app_main() {
   BMP280I2C sensor_bmp = BMP280I2C();
@@ -178,6 +197,17 @@ extern "C" void app_main() {
 
   mqtt.sendMessage(std::string(presence_topic_discovery), std::string(presence_discovery_payload));
   mqtt.sendMessage(std::string(temperature_topic_discovery), std::string(temperature_discovery_payload));
+  mqtt.sendMessage(std::string(indicator_topic_discovery), std::string(indicator_discovery_payload));
+
+  mqtt.subscribe(std::string(indicator_topic_command), [&led_gre](std::string t, std::string m) {
+    std::cout << "Indicator Command callback" << std::endl;
+    led_gre.setDutyCycle(0);
+  });
+  mqtt.subscribe(std::string(indicator_topic_brightness), [&led_gre](std::string t, std::string m) {
+    std::cout << "Indicator Brightness callback" << std::endl;
+    uint8_t val = std::stoi(m);
+    led_gre.setDutyCycle(val);
+  });
 
   uint8_t counter = 0;
   while(1) {
@@ -189,7 +219,6 @@ extern "C" void app_main() {
     counter++;
     std::cout << "PWM: " << static_cast<int>(counter) << std::endl;
     led_red.setDutyCycle(counter);
-    led_gre.setDutyCycle(255-counter);
     mqtt.sendMessage(std::string(presence_topic), std::string(presence ? "ON" : "OFF"));
     mqtt.sendMessage(std::string(temperature_topic), std::to_string(temp));
 

@@ -5,6 +5,10 @@
 #include "secrets.hh"
 #include <iostream>
 
+
+std::map<std::string,
+         std::function<void(const std::string&, const std::string&)>> callbacks_;
+
 // MQTT Code is modified from https://github.com/espressif/esp-idf/blob/692c1fcc52b9b936c73dead4ef0c2ea1fbdfb602/examples/protocols/mqtt/tcp/main/app_main.c
 static void log_error_if_nonzero(const char *message, int error_code) {
   if (error_code != 0) {
@@ -18,6 +22,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     esp_mqtt_event_handle_t event = static_cast<esp_mqtt_event_handle_t>(event_data);
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
+    std::string topic;
+    std::string data;
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         std::cout << "MQTT_EVENT_CONNECTED" << std::endl;
@@ -52,6 +58,16 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         std::cout << "MQTT_EVENT_DATA" << std::endl;
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
+        topic.assign(event->topic, event->topic + event->topic_len);
+        data.assign(event->data, event->data + event->data_len);
+        {
+          auto fn = callbacks_.find(topic);
+          if (fn != callbacks_.end()) {
+            callbacks_.at(topic)(topic, data);
+          } else {
+            std::cout << "Unrecognized topic" << std::endl;
+          }
+        }
         break;
     case MQTT_EVENT_ERROR:
         std::cout << "MQTT_EVENT_ERROR" << std::endl;
@@ -104,5 +120,10 @@ void MqttClient::subscribe(
     const std::string& topic,
     std::function<void(const std::string&, const std::string&)> callback
     ) {
-  return;
+  esp_mqtt_client_subscribe(
+    static_cast<esp_mqtt_client_handle_t>(client_),
+    topic.c_str(),
+    1
+  );
+  callbacks_.emplace(topic, callback);
 }
